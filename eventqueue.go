@@ -1,4 +1,4 @@
-package eventqueue
+package EventsToGo
 
 import (
 	"container/list"
