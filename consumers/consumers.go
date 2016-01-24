@@ -16,11 +16,11 @@ type GenericConsumer struct {
 	done      chan struct{}
 }
 
-func NewConsumer(name string, config map[string]string) *GenericConsumer {
+func NewConsumer(constructorMap map[string]func() GenericConsumer, name string, config map[string]string) *GenericConsumer {
 
-	consumer := &GenericConsumer{name, make(chan events.Event), make(chan struct{})}
+	consumer := constructorMap[name]()
 	consumer.setupFunction(config)
-	return consumer
+	return &consumer
 }
 
 func (consumer *GenericConsumer) Start() chan events.Event {

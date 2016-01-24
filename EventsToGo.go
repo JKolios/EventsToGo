@@ -3,8 +3,6 @@ package EventsToGo
 import (
 	"container/list"
 
-	"github.com/JKolios/EventsToGo/conf"
-
 	"log"
 	"time"
 
@@ -77,22 +75,24 @@ func (queue *EventQueue) consumerHub() {
 	}
 }
 
-func NewQueue(consumerNames, producerNames []string, config conf.Configuration) *EventQueue {
+func NewQueue(producerConstructorMap map[string]func(string, map[string]string) producers.Producer,
+	consumerConstructorMap map[string]func(string, map[string]string) consumers.Consumer,
+	producerConf, consumerConf map[string]map[string]string) *EventQueue {
 
 	queue := &EventQueue{}
 
 	queue.done = make(chan struct{})
 
 	// Consumer Init
-	for _, consumerName := range consumerNames {
-		consumer := consumers.NewConsumer(consumerName, config.ConsumerConf[consumerName])
+	for consumerName, consumerSettings := range consumerConf {
+		consumer := consumerConstructorMap[consumerName](consumerName, consumerSettings)
 		queue.consumers = append(queue.consumers, consumer)
 
 	}
 
 	// Producer Init
-	for _, producerName := range producerNames {
-		producer := producers.NewProducer(producerName, config.ProducerConf[producerName], queue.producerChan)
+	for producerName, producerSettings := range producerConf {
+		producer := producerConstructorMap[producerName](producerName, producerSettings)
 		queue.producers = append(queue.producers, producer)
 
 	}

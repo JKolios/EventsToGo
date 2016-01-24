@@ -12,24 +12,27 @@ type Producer interface {
 }
 
 type GenericActiveProducer struct {
-	name           string
+	Name           string
 	outputChan     chan<- events.Event
 	waitChan, done chan struct{}
 }
 
-func NewProducer(name string, config map[string]string, outputChan chan events.Event) *GenericActiveProducer {
+func NewProducer(constructorMap map[string]func() GenericActiveProducer, name string, config map[string]string, outputChan chan events.Event) *GenericActiveProducer {
 
-	producer := &GenericActiveProducer{name, outputChan, make(chan struct{}), make(chan struct{})}
+	producer := constructorMap[name]()
 
+	producer.outputChan = outputChan
+	producer.waitChan = make(chan struct{})
+	producer.done = make(chan struct{})
 	producer.setupFunction(config)
-	return producer
+	return &producer
 }
 
 func (producer *GenericActiveProducer) Start(outputChan chan<- events.Event) {
 
 	go producerCoroutine(producer)
 	go timingCoroutine(producer.done, producer.waitChan, producer.waitFunction)
-	log.Printf("%v Producer: started\n", producer.name)
+	log.Printf("%v Producer: started\n", producer.Name)
 }
 
 func (consumer *GenericActiveProducer) Stop() {
@@ -54,16 +57,16 @@ func producerCoroutine(producer *GenericActiveProducer) {
 		case <-producer.done:
 			{
 				producer.stopFunction()
-				log.Printf("%v Producer Terminated\n", producer.name)
+				log.Printf("%v Producer Terminated\n", producer.Name)
 				return
 			}
 		case <-producer.waitChan:
 			{
-				log.Printf("Starting %v polling\n", producer.name)
+				log.Printf("Starting %v polling\n", producer.Name)
 				funcResult, priority := producer.runFunction()
-				finalEvent := events.Event{funcResult, producer.name, time.Now(), priority}
+				finalEvent := events.Event{funcResult, producer.Name, time.Now(), priority}
 				producer.outputChan <- finalEvent
-				log.Printf("%v polling done\n", producer.name)
+				log.Printf("%v polling done\n", producer.Name)
 			}
 		}
 	}
