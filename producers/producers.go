@@ -3,7 +3,6 @@ package producers
 import (
 	"github.com/JKolios/EventsToGo/events"
 	"log"
-	"time"
 )
 
 type Producer interface {
@@ -13,42 +12,56 @@ type Producer interface {
 
 type GenericActiveProducer struct {
 	Name           string
+	RuntimeObjects map[string]interface{}
 	outputChan     chan<- events.Event
 	waitChan, done chan struct{}
+	runFunction    func(*GenericActiveProducer) events.Event
+	waitFunction   func(*GenericActiveProducer)
+	stopFunction   func(*GenericActiveProducer)
 }
 
-func NewProducer(constructorMap map[string]func() GenericActiveProducer, name string, config map[string]string, outputChan chan events.Event) *GenericActiveProducer {
-
-	producer := constructorMap[name]()
-
-	producer.outputChan = outputChan
+func NewGenericActiveProducer(name string) *GenericActiveProducer {
+	producer := &GenericActiveProducer{Name: name}
+	producer.RuntimeObjects = make(map[string]interface{})
 	producer.waitChan = make(chan struct{})
 	producer.done = make(chan struct{})
-	producer.setupFunction(config)
-	return &producer
+
+	return producer
+}
+
+func (producer *GenericActiveProducer) RegisterFunctions(runFunction func(*GenericActiveProducer) events.Event, waitFunction func(*GenericActiveProducer), stopFunction func(*GenericActiveProducer)) {
+
+	producer.runFunction = runFunction
+	if producer.runFunction == nil {
+		producer.runFunction = func(p *GenericActiveProducer) events.Event { return events.Event{} }
+	}
+
+	producer.waitFunction = waitFunction
+	if producer.waitFunction == nil {
+		producer.waitFunction = func(p *GenericActiveProducer) {}
+	}
+
+	producer.stopFunction = stopFunction
+	if producer.stopFunction == nil {
+		producer.stopFunction = func(p *GenericActiveProducer) {}
+	}
 }
 
 func (producer *GenericActiveProducer) Start(outputChan chan<- events.Event) {
+	if producer.runFunction == nil || producer.stopFunction == nil || producer.waitFunction == nil {
+		log.Fatalf("Producer %s run without registered functions\n")
+	}
+	producer.outputChan = outputChan
 
 	go producerCoroutine(producer)
-	go timingCoroutine(producer.done, producer.waitChan, producer.waitFunction)
+	go timingCoroutine(producer)
 	log.Printf("%v Producer: started\n", producer.Name)
 }
 
-func (consumer *GenericActiveProducer) Stop() {
+func (producer *GenericActiveProducer) Stop() {
 
-	close(consumer.done)
+	close(producer.done)
 }
-
-func (consumer *GenericActiveProducer) setupFunction(config map[string]string) {}
-
-func (consumer *GenericActiveProducer) runFunction() (events.Event, events.Priority) {
-	return events.Event{}, events.PRIORITY_LOW
-}
-
-func (consumer *GenericActiveProducer) waitFunction() {}
-
-func (consumer *GenericActiveProducer) stopFunction() {}
 
 func producerCoroutine(producer *GenericActiveProducer) {
 
@@ -56,30 +69,29 @@ func producerCoroutine(producer *GenericActiveProducer) {
 		select {
 		case <-producer.done:
 			{
-				producer.stopFunction()
+				producer.stopFunction(producer)
 				log.Printf("%v Producer Terminated\n", producer.Name)
 				return
 			}
 		case <-producer.waitChan:
 			{
 				log.Printf("Starting %v polling\n", producer.Name)
-				funcResult, priority := producer.runFunction()
-				finalEvent := events.Event{funcResult, producer.Name, time.Now(), priority}
-				producer.outputChan <- finalEvent
+				producedEvent := producer.runFunction(producer)
+				producer.outputChan <- producedEvent
 				log.Printf("%v polling done\n", producer.Name)
 			}
 		}
 	}
 }
 
-func timingCoroutine(done chan struct{}, waitChan chan struct{}, waitFunc func()) {
+func timingCoroutine(producer *GenericActiveProducer) {
 	for {
 		select {
-		case <-done:
+		case <-producer.done:
 			return
 		default:
-			waitFunc()
-			waitChan <- struct{}{}
+			producer.waitFunction(producer)
+			producer.waitChan <- struct{}{}
 
 		}
 	}

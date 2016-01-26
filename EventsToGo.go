@@ -13,7 +13,7 @@ import (
 )
 
 type EventQueue struct {
-	highPriorityeventList, lowPriorityeventList list.List
+	highPriorityeventList, lowPriorityeventList *list.List
 	producers                                   []producers.Producer
 	producerChan                                chan events.Event
 	consumerChannels                            []chan events.Event
@@ -75,29 +75,24 @@ func (queue *EventQueue) consumerHub() {
 	}
 }
 
-func NewQueue(producerConstructorMap map[string]func(string, map[string]string) producers.Producer,
-	consumerConstructorMap map[string]func(string, map[string]string) consumers.Consumer,
-	producerConf, consumerConf map[string]map[string]string) *EventQueue {
+func NewQueue() *EventQueue {
 
 	queue := &EventQueue{}
-
+	queue.highPriorityeventList = list.New()
+	queue.lowPriorityeventList = list.New()
 	queue.done = make(chan struct{})
 
-	// Consumer Init
-	for consumerName, consumerSettings := range consumerConf {
-		consumer := consumerConstructorMap[consumerName](consumerName, consumerSettings)
-		queue.consumers = append(queue.consumers, consumer)
-
-	}
-
-	// Producer Init
-	for producerName, producerSettings := range producerConf {
-		producer := producerConstructorMap[producerName](producerName, producerSettings)
-		queue.producers = append(queue.producers, producer)
-
-	}
-
 	return queue
+}
+
+func (queue *EventQueue) AddConsumer(consumer consumers.Consumer) {
+	queue.consumers = append(queue.consumers, consumer)
+
+}
+
+func (queue *EventQueue) AddProducer(producer producers.Producer) {
+	queue.producers = append(queue.producers, producer)
+
 }
 
 func (queue *EventQueue) Start() {
@@ -115,11 +110,11 @@ func (queue *EventQueue) Start() {
 	go queue.producerHub()
 	go queue.consumerHub()
 
-	go inspector.ListReport(&queue.lowPriorityeventList, "Low Priority", time.Minute*10)
-	go inspector.ListReport(&queue.highPriorityeventList, "High Priority", time.Minute*10)
+	go inspector.ListReport(queue.lowPriorityeventList, "Low Priority", time.Minute*10)
+	go inspector.ListReport(queue.highPriorityeventList, "High Priority", time.Minute*10)
 
-	go inspector.ListCleaner(&queue.lowPriorityeventList, "Low Priority", time.Minute*10)
-	go inspector.ListCleaner(&queue.highPriorityeventList, "High Priority", time.Minute*10)
+	go inspector.ListCleaner(queue.lowPriorityeventList, "Low Priority", time.Minute*10)
+	go inspector.ListCleaner(queue.highPriorityeventList, "High Priority", time.Minute*10)
 }
 
 func (queue *EventQueue) Stop() {
