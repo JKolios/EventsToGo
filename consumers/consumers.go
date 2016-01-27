@@ -12,15 +12,18 @@ type Consumer interface {
 
 type GenericConsumer struct {
 	Name           string
+	config         map[string]interface{}
 	RuntimeObjects map[string]interface{}
 	inputChan      chan events.Event
 	done           chan struct{}
+	setupFunction  func(*GenericConsumer, map[string]interface{})
 	runFunction    func(*GenericConsumer, events.Event)
 	stopFunction   func(*GenericConsumer)
 }
 
-func NewGenericConsumer(name string) *GenericConsumer {
+func NewGenericConsumer(name string, config map[string]interface{}) *GenericConsumer {
 	consumer := &GenericConsumer{Name: name}
+	consumer.config = config
 	consumer.RuntimeObjects = make(map[string]interface{})
 	consumer.inputChan = make(chan events.Event)
 	consumer.done = make(chan struct{})
@@ -29,7 +32,7 @@ func NewGenericConsumer(name string) *GenericConsumer {
 }
 
 func (consumer *GenericConsumer) Start() chan events.Event {
-
+	consumer.setupFunction(consumer, consumer.config)
 	go consumerCoroutine(consumer)
 	log.Printf("%v Consumer: started\n", consumer.Name)
 	return consumer.inputChan
@@ -40,7 +43,14 @@ func (consumer *GenericConsumer) Stop() {
 	close(consumer.done)
 }
 
-func (consumer *GenericConsumer) RegisterFunctions(runFunction func(*GenericConsumer, events.Event), stopFunction func(*GenericConsumer)) {
+func (consumer *GenericConsumer) RegisterFunctions(setupFunction func(*GenericConsumer, map[string]interface{}),
+	runFunction func(*GenericConsumer, events.Event),
+	stopFunction func(*GenericConsumer)) {
+
+	consumer.setupFunction = setupFunction
+	if consumer.setupFunction == nil {
+		consumer.setupFunction = func(c *GenericConsumer, s map[string]interface{}) {}
+	}
 
 	consumer.runFunction = runFunction
 	if consumer.runFunction == nil {

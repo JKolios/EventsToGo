@@ -12,16 +12,19 @@ type Producer interface {
 
 type GenericActiveProducer struct {
 	Name           string
+	config         map[string]interface{}
 	RuntimeObjects map[string]interface{}
 	outputChan     chan<- events.Event
 	waitChan, done chan struct{}
+	setupFunction  func(*GenericActiveProducer, map[string]interface{})
 	runFunction    func(*GenericActiveProducer) events.Event
 	waitFunction   func(*GenericActiveProducer)
 	stopFunction   func(*GenericActiveProducer)
 }
 
-func NewGenericActiveProducer(name string) *GenericActiveProducer {
+func NewGenericActiveProducer(name string, config map[string]interface{}) *GenericActiveProducer {
 	producer := &GenericActiveProducer{Name: name}
+	producer.config = config
 	producer.RuntimeObjects = make(map[string]interface{})
 	producer.waitChan = make(chan struct{})
 	producer.done = make(chan struct{})
@@ -29,7 +32,15 @@ func NewGenericActiveProducer(name string) *GenericActiveProducer {
 	return producer
 }
 
-func (producer *GenericActiveProducer) RegisterFunctions(runFunction func(*GenericActiveProducer) events.Event, waitFunction func(*GenericActiveProducer), stopFunction func(*GenericActiveProducer)) {
+func (producer *GenericActiveProducer) RegisterFunctions(setupFunction func(*GenericActiveProducer, map[string]interface{}),
+	runFunction func(*GenericActiveProducer) events.Event,
+	waitFunction func(*GenericActiveProducer),
+	stopFunction func(*GenericActiveProducer)) {
+
+	producer.setupFunction = setupFunction
+	if producer.setupFunction == nil {
+		producer.setupFunction = func(c *GenericActiveProducer, s map[string]interface{}) {}
+	}
 
 	producer.runFunction = runFunction
 	if producer.runFunction == nil {
@@ -48,11 +59,10 @@ func (producer *GenericActiveProducer) RegisterFunctions(runFunction func(*Gener
 }
 
 func (producer *GenericActiveProducer) Start(outputChan chan<- events.Event) {
-	if producer.runFunction == nil || producer.stopFunction == nil || producer.waitFunction == nil {
-		log.Fatalf("Producer %s run without registered functions\n")
-	}
+
 	producer.outputChan = outputChan
 
+	producer.setupFunction(producer, producer.config)
 	go producerCoroutine(producer)
 	go timingCoroutine(producer)
 	log.Printf("%v Producer: started\n", producer.Name)

@@ -12,19 +12,29 @@ import (
 
 const TEST_EVENT_COUNT = 5
 
-var testOutput []events.Event = []events.Event{}
+var testOutput []string = []string{}
 
 var referenceOutput []string = []string{}
 
 func PopulateReferenceData() {
 	for i := 1; i <= TEST_EVENT_COUNT; i++ {
-		referenceOutput = append(referenceOutput, strconv.Itoa(i))
+		referenceOutput = append(referenceOutput, "Producer"+strconv.Itoa(i)+"Consumer")
 	}
+}
+
+func ConsumerSetupFuction(consumer *consumers.GenericConsumer, config map[string]interface{}) {
+	consumer.RuntimeObjects["consumerString"] = config["consumerString"].(string)
+
 }
 
 func ConsumerRunFuction(consumer *consumers.GenericConsumer, event events.Event) {
 	log.Println("Running ConsumerRunFuction")
-	testOutput = append(testOutput, event)
+	testOutput = append(testOutput, event.Payload.(string)+consumer.RuntimeObjects["consumerString"].(string))
+
+}
+
+func ProducerSetupFuction(producer *producers.GenericActiveProducer, config map[string]interface{}) {
+	producer.RuntimeObjects["producerString"] = config["producerString"].(string)
 
 }
 
@@ -38,7 +48,7 @@ func ProducerRunFuction(producer *producers.GenericActiveProducer) events.Event 
 		log.Println("Running ProducerRunFuction")
 		producer.RuntimeObjects["numRuns"] = producer.RuntimeObjects["numRuns"].(int) + 1
 
-		return events.Event{strconv.Itoa(producer.RuntimeObjects["numRuns"].(int)),
+		return events.Event{producer.RuntimeObjects["producerString"].(string) + strconv.Itoa(producer.RuntimeObjects["numRuns"].(int)),
 			producer.Name, time.Now(), events.PRIORITY_LOW}
 
 	}
@@ -53,13 +63,15 @@ func TestQueueFunctionality(t *testing.T) {
 
 	PopulateReferenceData()
 
+	testConfig := map[string]interface{}{"producerString": "Producer", "consumerString": "Consumer"}
+
 	queue := NewQueue()
 
-	producer := producers.NewGenericActiveProducer("testProd")
-	producer.RegisterFunctions(ProducerRunFuction, ProducerWaitFunction, nil)
+	producer := producers.NewGenericActiveProducer("testProd", testConfig)
+	producer.RegisterFunctions(ProducerSetupFuction, ProducerRunFuction, ProducerWaitFunction, nil)
 	producer.RuntimeObjects["numRuns"] = 0
-	consumer := consumers.NewGenericConsumer("testCons")
-	consumer.RegisterFunctions(ConsumerRunFuction, nil)
+	consumer := consumers.NewGenericConsumer("testCons", testConfig)
+	consumer.RegisterFunctions(ConsumerSetupFuction, ConsumerRunFuction, nil)
 
 	queue.AddConsumer(consumer)
 	queue.AddProducer(producer)
@@ -74,13 +86,10 @@ func TestQueueFunctionality(t *testing.T) {
 	}
 
 	for i, output := range testOutput {
-		if output.Payload.(string) != referenceOutput[i] {
+		if output != referenceOutput[i] {
 			t.Errorf("Wrong payload for event: %v\n", i)
 		}
 
-		if output.Type != "testProd" {
-			t.Errorf("Wrong type for event: %v\n", i)
-		}
 	}
 
 }
