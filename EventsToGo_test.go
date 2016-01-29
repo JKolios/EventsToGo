@@ -33,12 +33,12 @@ func ConsumerRunFuction(consumer *consumers.GenericConsumer, event events.Event)
 
 }
 
-func ProducerSetupFuction(producer *producers.GenericActiveProducer, config map[string]interface{}) {
+func ProducerSetupFuction(producer *producers.GenericProducer, config map[string]interface{}) {
 	producer.RuntimeObjects["producerString"] = config["producerString"].(string)
 
 }
 
-func ProducerRunFuction(producer *producers.GenericActiveProducer) events.Event {
+func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
 	if producer.RuntimeObjects["numRuns"].(int) == TEST_EVENT_COUNT {
 		haltChan := make(chan interface{})
 		<-haltChan
@@ -55,7 +55,7 @@ func ProducerRunFuction(producer *producers.GenericActiveProducer) events.Event 
 
 }
 
-func ProducerWaitFunction(producer *producers.GenericActiveProducer) {
+func ProducerWaitFunction(producer *producers.GenericProducer) {
 	log.Println("Running ProducerWaitFunction")
 }
 
@@ -67,7 +67,7 @@ func TestQueueFunctionality(t *testing.T) {
 
 	queue := NewQueue()
 
-	producer := producers.NewGenericActiveProducer("testProd", testConfig)
+	producer := producers.NewGenericProducer("testProd", testConfig)
 	producer.RegisterFunctions(ProducerSetupFuction, ProducerRunFuction, ProducerWaitFunction, nil)
 	producer.RuntimeObjects["numRuns"] = 0
 	consumer := consumers.NewGenericConsumer("testCons", testConfig)

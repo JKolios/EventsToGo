@@ -15,7 +15,7 @@ type GenericConsumer struct {
 	config         map[string]interface{}
 	RuntimeObjects map[string]interface{}
 	inputChan      chan events.Event
-	done           chan struct{}
+	Done           chan struct{}
 	setupFunction  func(*GenericConsumer, map[string]interface{})
 	runFunction    func(*GenericConsumer, events.Event)
 	stopFunction   func(*GenericConsumer)
@@ -26,7 +26,7 @@ func NewGenericConsumer(name string, config map[string]interface{}) *GenericCons
 	consumer.config = config
 	consumer.RuntimeObjects = make(map[string]interface{})
 	consumer.inputChan = make(chan events.Event)
-	consumer.done = make(chan struct{})
+	consumer.Done = make(chan struct{})
 
 	return consumer
 }
@@ -40,7 +40,7 @@ func (consumer *GenericConsumer) Start() chan events.Event {
 
 func (consumer *GenericConsumer) Stop() {
 
-	close(consumer.done)
+	close(consumer.Done)
 }
 
 func (consumer *GenericConsumer) RegisterFunctions(setupFunction func(*GenericConsumer, map[string]interface{}),
@@ -66,7 +66,7 @@ func (consumer *GenericConsumer) RegisterFunctions(setupFunction func(*GenericCo
 func consumerCoroutine(consumer *GenericConsumer) {
 	for {
 		select {
-		case <-consumer.done:
+		case <-consumer.Done:
 			{
 				consumer.stopFunction(consumer)
 				log.Printf("%v Consumer Terminated\n", consumer.Name)
