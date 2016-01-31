@@ -48,7 +48,7 @@ func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
 		producer.RuntimeObjects["numRuns"] = producer.RuntimeObjects["numRuns"].(int) + 1
 
 		return events.Event{producer.RuntimeObjects["producerString"].(string) + strconv.Itoa(producer.RuntimeObjects["numRuns"].(int)),
-			producer.Name, time.Now(), events.PRIORITY_LOW}
+			producer.Name, time.Now(), TEST_EVENT_COUNT - producer.RuntimeObjects["numRuns"].(int)}
 
 	}
 
@@ -63,7 +63,9 @@ func TestQueueFunctionality(t *testing.T) {
 
 	testConfig := map[string]interface{}{"producerString": "Producer", "consumerString": "Consumer"}
 
-	queue := NewQueue(nil)
+	eventTTL := time.Minute * 5
+
+	queue := NewQueue(&eventTTL)
 
 	producer := producers.NewGenericProducer("testProd", testConfig)
 	producer.RegisterFunctions(ProducerSetupFuction, ProducerRunFuction, ProducerWaitFunction, nil)

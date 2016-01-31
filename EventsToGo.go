@@ -55,7 +55,7 @@ func (queue *EventQueue) consumerHub() {
 				selectedEvent := tempSelectedEvent.(events.Event)
 				log.Printf("consumerHub dequeued event: %+v \n", selectedEvent)
 
-				if (queue.eventTTL == nil) || (time.Now().Sub(selectedEvent.CreatedOn) > *queue.eventTTL) {
+				if (queue.eventTTL == nil) || (time.Now().Sub(selectedEvent.CreatedOn) < *queue.eventTTL) {
 					for _, consumerChan := range queue.consumerChannels {
 						consumerChan <- selectedEvent
 					}
