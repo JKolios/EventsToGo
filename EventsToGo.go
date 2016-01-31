@@ -1,24 +1,23 @@
 package EventsToGo
 
 import (
-	"container/list"
-
 	"log"
 	"time"
 
 	"github.com/JKolios/EventsToGo/consumers"
 	"github.com/JKolios/EventsToGo/events"
-	"github.com/JKolios/EventsToGo/inspector"
 	"github.com/JKolios/EventsToGo/producers"
+	"github.com/oleiade/lane"
 )
 
 type EventQueue struct {
-	highPriorityeventList, lowPriorityeventList *list.List
-	producers                                   []producers.Producer
-	producerChan                                chan events.Event
-	consumerChannels                            []chan events.Event
-	consumers                                   []consumers.Consumer
-	done                                        chan struct{}
+	events           *lane.PQueue
+	eventTTL         *time.Duration
+	producers        []producers.Producer
+	producerChan     chan events.Event
+	consumers        []consumers.Consumer
+	consumerChannels []chan events.Event
+	done             chan struct{}
 }
 
 func (queue *EventQueue) producerHub() {
@@ -34,19 +33,13 @@ func (queue *EventQueue) producerHub() {
 		case incomingEvent = <-queue.producerChan:
 			log.Printf("producerHub got event: %+v\n", incomingEvent)
 			// Inspect the event and handle according to type and priority
-			if incomingEvent.Priority == events.PRIORITY_HIGH {
-				queue.highPriorityeventList.PushBack(incomingEvent)
-			} else {
-				queue.lowPriorityeventList.PushBack(incomingEvent)
-			}
+			queue.events.Push(incomingEvent, incomingEvent.Priority)
 
 		}
 	}
 }
 
 func (queue *EventQueue) consumerHub() {
-
-	var selectedEvent events.Event
 
 	for {
 		select {
@@ -57,29 +50,31 @@ func (queue *EventQueue) consumerHub() {
 
 		default:
 
-			if queue.highPriorityeventList.Len() > 0 {
-				selectedEvent = queue.highPriorityeventList.Remove(queue.highPriorityeventList.Front()).(events.Event)
-			} else if queue.lowPriorityeventList.Len() > 0 {
-				selectedEvent = queue.lowPriorityeventList.Remove(queue.lowPriorityeventList.Front()).(events.Event)
-			} else {
-				continue
-			}
+			tempSelectedEvent, _ := queue.events.Pop()
+			if tempSelectedEvent != nil {
+				selectedEvent := tempSelectedEvent.(events.Event)
+				log.Printf("consumerHub dequeued event: %+v \n", selectedEvent)
 
-			log.Printf("consumerHub selected event: %+v \n", selectedEvent)
+				if (queue.eventTTL == nil) || (time.Now().Sub(selectedEvent.CreatedOn) > *queue.eventTTL) {
+					for _, consumerChan := range queue.consumerChannels {
+						consumerChan <- selectedEvent
+					}
+					log.Println("event dispatched to consumers")
 
-			for _, consumerChan := range queue.consumerChannels {
-				consumerChan <- selectedEvent
+				} else {
+					log.Println("event exceeded TTL, discarding")
+
+				}
 			}
 
 		}
 	}
 }
 
-func NewQueue() *EventQueue {
+func NewQueue(EventTTL *time.Duration) *EventQueue {
 
-	queue := &EventQueue{}
-	queue.highPriorityeventList = list.New()
-	queue.lowPriorityeventList = list.New()
+	queue := &EventQueue{eventTTL: EventTTL}
+	queue.events = lane.NewPQueue(lane.MAXPQ)
 	queue.done = make(chan struct{})
 
 	return queue
@@ -110,11 +105,6 @@ func (queue *EventQueue) Start() {
 	go queue.producerHub()
 	go queue.consumerHub()
 
-	go inspector.ListReport(queue.lowPriorityeventList, "Low Priority", time.Minute*10)
-	go inspector.ListReport(queue.highPriorityeventList, "High Priority", time.Minute*10)
-
-	go inspector.ListCleaner(queue.lowPriorityeventList, "Low Priority", time.Minute*10)
-	go inspector.ListCleaner(queue.highPriorityeventList, "High Priority", time.Minute*10)
 }
 
 func (queue *EventQueue) Stop() {

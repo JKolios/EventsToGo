@@ -28,7 +28,6 @@ func ConsumerSetupFuction(consumer *consumers.GenericConsumer, config map[string
 }
 
 func ConsumerRunFuction(consumer *consumers.GenericConsumer, event events.Event) {
-	log.Println("Running ConsumerRunFuction")
 	testOutput = append(testOutput, event.Payload.(string)+consumer.RuntimeObjects["consumerString"].(string))
 
 }
@@ -56,7 +55,6 @@ func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
 }
 
 func ProducerWaitFunction(producer *producers.GenericProducer) {
-	log.Println("Running ProducerWaitFunction")
 }
 
 func TestQueueFunctionality(t *testing.T) {
@@ -65,7 +63,7 @@ func TestQueueFunctionality(t *testing.T) {
 
 	testConfig := map[string]interface{}{"producerString": "Producer", "consumerString": "Consumer"}
 
-	queue := NewQueue()
+	queue := NewQueue(nil)
 
 	producer := producers.NewGenericProducer("testProd", testConfig)
 	producer.RegisterFunctions(ProducerSetupFuction, ProducerRunFuction, ProducerWaitFunction, nil)

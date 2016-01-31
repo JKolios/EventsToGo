@@ -4,8 +4,6 @@ import (
 	"time"
 )
 
-type Priority int
-
 const (
 	PRIORITY_LOW = iota
 	PRIORITY_HIGH
@@ -18,5 +16,5 @@ type Event struct {
 	Payload   interface{}
 	Type      string
 	CreatedOn time.Time
-	Priority  Priority
+	Priority  int
 }
