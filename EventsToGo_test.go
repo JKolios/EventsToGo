@@ -1,13 +1,14 @@
 package EventsToGo
 
 import (
-	"github.com/JKolios/EventsToGo/consumers"
-	"github.com/JKolios/EventsToGo/events"
-	"github.com/JKolios/EventsToGo/producers"
 	"log"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/JKolios/EventsToGo/consumers"
+	"github.com/JKolios/EventsToGo/events"
+	"github.com/JKolios/EventsToGo/producers"
 )
 
 const TEST_EVENT_COUNT = 5
@@ -47,8 +48,12 @@ func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
 		log.Println("Running ProducerRunFuction")
 		producer.RuntimeObjects["numRuns"] = producer.RuntimeObjects["numRuns"].(int) + 1
 
-		return events.Event{producer.RuntimeObjects["producerString"].(string) + strconv.Itoa(producer.RuntimeObjects["numRuns"].(int)),
-			producer.Name, time.Now(), TEST_EVENT_COUNT - producer.RuntimeObjects["numRuns"].(int)}
+		return events.Event{
+			Payload:   producer.RuntimeObjects["producerString"].(string) + strconv.Itoa(producer.RuntimeObjects["numRuns"].(int)),
+			Type:      producer.Name,
+			CreatedOn: time.Now(),
+			Priority:  TEST_EVENT_COUNT - producer.RuntimeObjects["numRuns"].(int),
+		}
 
 	}
 
@@ -75,11 +80,18 @@ func TestQueueFunctionality(t *testing.T) {
 
 	queue.AddConsumer(consumer)
 	queue.AddProducer(producer)
-	queue.Start()
+	queue.StartProducers()
 
 	time.Sleep(1 * time.Second)
+	if queue.TaskCount() != TEST_EVENT_COUNT {
+		t.Error("Wrong number of events in task queue")
+	}
 
-	queue.Stop()
+	queue.StartConsumers()
+	time.Sleep(1 * time.Second)
+
+	queue.StopProducers()
+	queue.StopConsumers()
 
 	if len(testOutput) != TEST_EVENT_COUNT {
 		t.Error("Wrong number of events returned")
