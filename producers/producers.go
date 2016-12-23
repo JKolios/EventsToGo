@@ -8,22 +8,23 @@ import (
 type Producer interface {
 	Start(chan<- events.Event)
 	Stop()
+	Produce()
 }
 
-type GenericProducer struct {
+type PlugableMethodProducer struct {
 	Name           string
 	config         map[string]interface{}
 	RuntimeObjects map[string]interface{}
 	outputChan     chan<- events.Event
 	waitChan, Done chan struct{}
-	setupFunction  func(*GenericProducer, map[string]interface{})
-	runFunction    func(*GenericProducer) events.Event
-	waitFunction   func(*GenericProducer)
-	stopFunction   func(*GenericProducer)
+	setupFunction  func(*PlugableMethodProducer, map[string]interface{})
+	runFunction    func(*PlugableMethodProducer) events.Event
+	waitFunction   func(*PlugableMethodProducer)
+	stopFunction   func(*PlugableMethodProducer)
 }
 
-func NewGenericProducer(name string, config map[string]interface{}) *GenericProducer {
-	producer := &GenericProducer{Name: name}
+func NewPlugableMethodProducer(name string, config map[string]interface{}) *PlugableMethodProducer {
+	producer := &PlugableMethodProducer{Name: name}
 	producer.config = config
 	producer.RuntimeObjects = make(map[string]interface{})
 	producer.waitChan = make(chan struct{})
@@ -32,33 +33,33 @@ func NewGenericProducer(name string, config map[string]interface{}) *GenericProd
 	return producer
 }
 
-func (producer *GenericProducer) RegisterFunctions(setupFunction func(*GenericProducer, map[string]interface{}),
-	runFunction func(*GenericProducer) events.Event,
-	waitFunction func(*GenericProducer),
-	stopFunction func(*GenericProducer)) {
+func (producer *PlugableMethodProducer) RegisterFunctions(setupFunction func(*PlugableMethodProducer, map[string]interface{}),
+	runFunction func(*PlugableMethodProducer) events.Event,
+	waitFunction func(*PlugableMethodProducer),
+	stopFunction func(*PlugableMethodProducer)) {
 
 	producer.setupFunction = setupFunction
 	if producer.setupFunction == nil {
-		producer.setupFunction = func(c *GenericProducer, s map[string]interface{}) {}
+		producer.setupFunction = func(c *PlugableMethodProducer, s map[string]interface{}) {}
 	}
 
 	producer.runFunction = runFunction
 	if producer.runFunction == nil {
-		producer.runFunction = func(p *GenericProducer) events.Event { return events.Event{} }
+		producer.runFunction = func(p *PlugableMethodProducer) events.Event { return events.Event{} }
 	}
 
 	producer.waitFunction = waitFunction
 	if producer.waitFunction == nil {
-		producer.waitFunction = func(p *GenericProducer) {}
+		producer.waitFunction = func(p *PlugableMethodProducer) {}
 	}
 
 	producer.stopFunction = stopFunction
 	if producer.stopFunction == nil {
-		producer.stopFunction = func(p *GenericProducer) {}
+		producer.stopFunction = func(p *PlugableMethodProducer) {}
 	}
 }
 
-func (producer *GenericProducer) Start(outputChan chan<- events.Event) {
+func (producer *PlugableMethodProducer) Start(outputChan chan<- events.Event) {
 
 	producer.outputChan = outputChan
 
@@ -68,12 +69,18 @@ func (producer *GenericProducer) Start(outputChan chan<- events.Event) {
 	log.Printf("%v Producer: started\n", producer.Name)
 }
 
-func (producer *GenericProducer) Stop() {
+func (producer *PlugableMethodProducer) Stop() {
 
 	close(producer.Done)
 }
 
-func producerCoroutine(producer *GenericProducer) {
+func (producer * PlugableMethodProducer) Produce() {
+	producedEvent := producer.runFunction(producer)
+	producer.outputChan <- producedEvent
+}
+
+
+func producerCoroutine(producer *PlugableMethodProducer) {
 
 	for {
 		select {
@@ -86,15 +93,14 @@ func producerCoroutine(producer *GenericProducer) {
 		case <-producer.waitChan:
 			{
 				log.Printf("Starting %v polling\n", producer.Name)
-				producedEvent := producer.runFunction(producer)
-				producer.outputChan <- producedEvent
+				producer.Produce()
 				log.Printf("%v polling done\n", producer.Name)
 			}
 		}
 	}
 }
 
-func timingCoroutine(producer *GenericProducer) {
+func timingCoroutine(producer *PlugableMethodProducer) {
 	for {
 		select {
 		case <-producer.Done:

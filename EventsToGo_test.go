@@ -23,22 +23,22 @@ func PopulateReferenceData() {
 	}
 }
 
-func ConsumerSetupFuction(consumer *consumers.GenericConsumer, config map[string]interface{}) {
+func ConsumerSetupFuction(consumer *consumers.PlugableMethodConsumer, config map[string]interface{}) {
 	consumer.RuntimeObjects["consumerString"] = config["consumerString"].(string)
 
 }
 
-func ConsumerRunFuction(consumer *consumers.GenericConsumer, event events.Event) {
+func ConsumerRunFuction(consumer *consumers.PlugableMethodConsumer, event events.Event) {
 	testOutput = append(testOutput, event.Payload.(string)+consumer.RuntimeObjects["consumerString"].(string))
 
 }
 
-func ProducerSetupFuction(producer *producers.GenericProducer, config map[string]interface{}) {
+func ProducerSetupFuction(producer *producers.PlugableMethodProducer, config map[string]interface{}) {
 	producer.RuntimeObjects["producerString"] = config["producerString"].(string)
 
 }
 
-func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
+func ProducerRunFuction(producer *producers.PlugableMethodProducer) events.Event {
 	if producer.RuntimeObjects["numRuns"].(int) == TEST_EVENT_COUNT {
 		haltChan := make(chan interface{})
 		<-haltChan
@@ -59,7 +59,7 @@ func ProducerRunFuction(producer *producers.GenericProducer) events.Event {
 
 }
 
-func ProducerWaitFunction(producer *producers.GenericProducer) {
+func ProducerWaitFunction(producer *producers.PlugableMethodProducer) {
 }
 
 func TestQueueFunctionality(t *testing.T) {
@@ -72,10 +72,10 @@ func TestQueueFunctionality(t *testing.T) {
 
 	queue := NewQueue(&eventTTL)
 
-	producer := producers.NewGenericProducer("testProd", testConfig)
+	producer := producers.NewPlugableMethodProducer("testProd", testConfig)
 	producer.RegisterFunctions(ProducerSetupFuction, ProducerRunFuction, ProducerWaitFunction, nil)
 	producer.RuntimeObjects["numRuns"] = 0
-	consumer := consumers.NewGenericConsumer("testCons", testConfig)
+	consumer := consumers.NewPlugableMethodConsumer("testCons", testConfig)
 	consumer.RegisterFunctions(ConsumerSetupFuction, ConsumerRunFuction, nil)
 
 	queue.AddConsumer(consumer)
